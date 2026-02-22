@@ -1,6 +1,6 @@
 ---
 name: npu-commands
-description: Ascend NPU command-line utilities and hardware management master skill. Use for npu-smi usage, device management, monitoring, and basic hardware operations. Routes to specialized sub-skills organized by function: queries (basic/metrics/advanced), configuration (thresholds/modes/fan/system/clear), upgrades (workflow/components), virtualization (query/manage), and certificates (query/manage/monitor).
+description: Ascend NPU command-line utilities and hardware management master skill. Use for npu-smi usage, device management, monitoring, and basic hardware operations. Routes to specialized sub-skills organized by function: queries (basic/advanced), configuration (thresholds/modes/fan/system/clear), upgrades (workflow/components), virtualization (query/manage), and certificates (query/manage/monitor).
 ---
 
 # npu-smi Command Reference
@@ -9,7 +9,7 @@ Master skill for Huawei Ascend NPU command-line utilities. This skill organizes 
 
 ## Overview
 
-The `npu-smi` utility provides comprehensive management capabilities for Ascend NPU devices. To keep skills lightweight and focused, functionality is split into **18 specialized sub-skills** organized by category.
+The `npu-smi` utility provides comprehensive management capabilities for Ascend NPU devices. To keep skills lightweight and focused, functionality is split into **14 specialized sub-skills** organized by category.
 
 ## Quick Start
 
@@ -20,10 +20,8 @@ npu-smi info -l
 # Check health
 npu-smi info -t health -i 0
 
-# View metrics
-npu-smi info -t temp -i 0 -c 0
-npu-smi info -t power -i 0 -c 0
-npu-smi info -t memory -i 0 -c 0
+# View device details
+npu-smi info -t board -i 0
 ```
 
 ## Sub-Skill Organization
@@ -34,13 +32,11 @@ Query device status and information.
 
 | Sub-Skill | Use When | Key Commands |
 |-----------|----------|--------------|
-| [npu-smi-info/basic/](npu-smi-info/basic/SKILL.md) | Listing devices, checking health, viewing board/chip info | `info -l`, `info -t health`, `info -t board`, `info -m` |
-| [npu-smi-info/metrics/](npu-smi-info/metrics/SKILL.md) | Monitoring temperature, power, memory, frequency | `info -t temp`, `info -t power`, `info -t memory`, `info -t freq` |
+| [npu-smi-info/basic/](npu-smi-info/basic/SKILL.md) | Listing devices, checking health, viewing board/chip info, temperature, power, memory | `info -l`, `info -t health`, `info -t board`, `info -t temp`, `info -t power`, `info -t memory` |
 | [npu-smi-info/advanced/](npu-smi-info/advanced/SKILL.md) | Checking processes, ECC errors, utilization, PCIe | `info proc`, `info -t ecc`, `info -t usages`, `info -t pcie-info` |
 
 **Navigation Guide:**
-- Use **basic** for initial device discovery and health checks
-- Use **metrics** for real-time performance monitoring
+- Use **basic** for device discovery, health checks, and real-time metrics (temperature, power, memory)
 - Use **advanced** for troubleshooting and detailed diagnostics
 
 ### ⚙️ 2. Configuration (npu-smi-config/)
@@ -122,8 +118,7 @@ Manage TLS certificates and security.
 
 ```
 Need to check device status?
-├── Basic info → npu-smi-info/basic/
-├── Temperature/Power/Memory → npu-smi-info/metrics/
+├── Basic info / Temp / Power / Memory → npu-smi-info/basic/
 ├── Processes/Errors/Utilization → npu-smi-info/advanced/
 
 Need to change settings?

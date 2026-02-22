@@ -1,11 +1,11 @@
 ---
 name: npu-smi-info-basic
-description: npu-smi basic info queries for Huawei Ascend NPU. Use when listing devices, checking device health, or viewing board and chip information. Covers device discovery and basic status checks.
+description: npu-smi basic info queries for Huawei Ascend NPU. Use when listing devices, checking device health, viewing board and chip information, or monitoring temperature, power, and memory metrics. Covers device discovery, basic status checks, and real-time performance metrics.
 ---
 
 # npu-smi Basic Info Queries
 
-Query basic device information using `npu-smi info`.
+Query basic device information and real-time metrics using `npu-smi info`.
 
 ## Quick Reference
 
@@ -15,6 +15,9 @@ npu-smi info -t health -i 0  # Check device health
 npu-smi info -t board -i 0   # View board info
 npu-smi info -t npu -i 0 -c 0 # View chip info
 npu-smi info -m              # List all chips
+npu-smi info -t temp -i 0 -c 0   # Temperature
+npu-smi info -t power -i 0 -c 0  # Power
+npu-smi info -t memory -i 0 -c 0 # Memory
 ```
 
 ## Commands
@@ -33,15 +36,15 @@ npu-smi info -l
 | NPU ID | Device identifier |
 | Name | Device name |
 
-**Example:**
+**Note:** Output format may vary by npu-smi version and hardware platform.
+
+**Example (simplified):**
 ```bash
 $ npu-smi info -l
-+-----------+-----------+
-| NPU ID    | Name      |
-+-----------+-----------+
-| 0         | 910B      |
-| 1         | 910B      |
-+-----------+-----------+
+Total        : 8 NPU in system
+NPU          : 0
+Name         : 910B3
+...
 ```
 
 ### Query Device Health
@@ -122,6 +125,39 @@ npu-smi info -m
 | Name | Chip name |
 | Health | Health status |
 
+### Query Temperature
+
+```bash
+npu-smi info -t temp -i <id> -c <chip_id>
+```
+
+**Output:**
+- NPU Temperature (°C)
+- AI Core Temperature (°C)
+
+**Note:** Output format may vary by npu-smi version.
+
+### Query Power
+
+```bash
+npu-smi info -t power -i <id> -c <chip_id>
+```
+
+**Output:**
+- Power Usage (W)
+- Power Limit (W)
+
+### Query Memory
+
+```bash
+npu-smi info -t memory -i <id> -c <chip_id>
+```
+
+**Output:**
+- Memory Usage (MB)
+- Memory Total (MB)
+- Memory Usage Rate (%)
+
 ## Examples
 
 ### Quick Health Check
@@ -143,14 +179,38 @@ done
 #!/bin/bash
 
 NPU=0
+CHIP=0
 
 echo "=== Device $NPU Summary ==="
 npu-smi info -t health -i $NPU
 npu-smi info -t board -i $NPU
+echo ""
+echo "=== Metrics ==="
+npu-smi info -t temp -i $NPU -c $CHIP
+npu-smi info -t power -i $NPU -c $CHIP
+npu-smi info -t memory -i $NPU -c $CHIP
+```
+
+### Resource Monitoring Script
+
+```bash
+#!/bin/bash
+
+echo "=== NPU Resource Monitor $(date) ==="
+
+for npu in $(npu-smi info -l 2>/dev/null | grep -oP 'NPU\s*:\s*\K[0-9]+'); do
+    echo ""
+    echo "--- NPU $npu ---"
+    temp=$(npu-smi info -t temp -i $npu -c 0 2>/dev/null | grep -oP 'NPU Temperature\s*:\s*\K[0-9]+' || echo "N/A")
+    power=$(npu-smi info -t power -i $npu -c 0 2>/dev/null | grep -oP 'Power Usage\s*:\s*\K[0-9.]+' || echo "N/A")
+    mem=$(npu-smi info -t memory -i $npu -c 0 2>/dev/null | grep -oP 'Memory Usage Rate\s*:\s*\K[0-9]+' || echo "N/A")
+    echo "  Temperature: ${temp}°C"
+    echo "  Power: ${power}W"
+    echo "  Memory Usage: ${mem}%"
+done
 ```
 
 ## Related Skills
 
-- [../npu-smi-info/metrics/](metrics/SKILL.md) - Temperature, power, memory queries
 - [../npu-smi-info/advanced/](advanced/SKILL.md) - Processes, ECC, utilization
-- [../../npu-smi-config/](npu-smi-config/SKILL.md) - Configuration commands
+- [../../npu-smi-config/thresholds/](npu-smi-config/thresholds/SKILL.md) - Set temperature/power thresholds
