@@ -1,9 +1,26 @@
 #!/bin/bash
 # Auto-detect and setup CANN environment
 # Usage: source ./setup_env.sh OR ./setup_env.sh
+#
+# This script will:
+#   1. Detect your CANN installation (8.3.RC1 or 8.5.0+)
+#   2. Source the appropriate environment
+#   3. Verify atc command is available
+#   4. Display SoC version warning
 
-echo "=== ATC Environment Auto-Setup ==="
+set -e
+
+echo "=============================================="
+echo "  ATC Environment Auto-Setup"
+echo "=============================================="
 echo
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
 
 # Detect CANN version and path
 detect_cann_version() {
@@ -26,9 +43,37 @@ detect_cann_version() {
         elif [[ "$atc_path" == *"ascend-toolkit"* ]]; then
             cann_path="/usr/local/Ascend/ascend-toolkit"
         fi
+        cann_version="detected via atc"
     fi
     
     echo "$cann_path|$cann_version"
+}
+
+# Check NPU device and get SoC version
+check_npu_device() {
+    echo -e "\n${BLUE}[NPU Device Check]${NC}"
+    
+    if command -v npu-smi &>/dev/null; then
+        local npu_info=$(npu-smi info 2>/dev/null | grep -E "Name|Version" | head -5)
+        if [ -n "$npu_info" ]; then
+            echo "$npu_info"
+            
+            # Extract SoC name
+            local soc_name=$(npu-smi info 2>/dev/null | grep "Name" | awk '{print $NF}')
+            if [ -n "$soc_name" ]; then
+                echo -e "\n${YELLOW}⚠️  IMPORTANT: SoC Version Matching${NC}"
+                echo "   Your device SoC: Ascend$soc_name"
+                echo "   ATC command must use: --soc_version=Ascend$soc_name"
+                echo -e "   ${RED}Error example: supported socVersion=Ascend910B3, but the model socVersion=Ascend910B${NC}"
+                echo
+            fi
+        else
+            echo -e "${YELLOW}Warning: npu-smi info returned empty${NC}"
+        fi
+    else
+        echo -e "${YELLOW}npu-smi not found - running on non-Ascend host?${NC}"
+        echo "For conversion on non-Ascend host, ensure you know the target device's SoC version."
+    fi
 }
 
 # Setup environment based on version
@@ -38,44 +83,59 @@ setup_environment() {
     local cann_version=$(echo "$result" | cut -d'|' -f2)
     
     if [ -z "$cann_path" ]; then
-        echo "✗ CANN installation not found!"
-        echo "  Please install CANN Toolkit first."
+        echo -e "${RED}✗ CANN installation not found!${NC}"
+        echo
+        echo "Please install CANN Toolkit first:"
+        echo "  Download from: https://www.hiascend.com/software/cann"
+        echo
         return 1
     fi
     
-    echo "✓ CANN installation found:"
+    echo -e "${GREEN}✓ CANN installation found:${NC}"
     echo "  Path: $cann_path"
     echo "  Version: ${cann_version:-Unknown}"
     echo
     
     # Source the environment
     if [ -f "$cann_path/set_env.sh" ]; then
-        echo "→ Sourcing environment from: $cann_path/set_env.sh"
+        echo -e "${BLUE}→ Sourcing environment from: $cann_path/set_env.sh${NC}"
         source "$cann_path/set_env.sh"
-        echo "✓ Environment setup complete"
     else
-        echo "✗ Environment setup script not found at: $cann_path/set_env.sh"
+        echo -e "${RED}✗ Environment setup script not found at: $cann_path/set_env.sh${NC}"
+        return 1
+    fi
+    
+    # Verify atc is available
+    echo
+    echo -e "${BLUE}[ATC Verification]${NC}"
+    if command -v atc &>/dev/null; then
+        local atc_version=$(atc --help 2>&1 | head -1 || echo "unknown")
+        echo -e "${GREEN}✓ atc command available${NC}"
+        echo "  Version info: $atc_version"
+    else
+        echo -e "${RED}✗ atc command not found after sourcing environment!${NC}"
+        echo "  This may indicate an incomplete CANN installation."
         return 1
     fi
     
     # Version-specific additional setup
     if [[ "$cann_path" == *"cann"* ]] && [[ "$cann_version" =~ ^8\.[5-9] ]]; then
         echo
-        echo "ℹ CANN 8.5.0+ detected. Additional setup:"
+        echo -e "${BLUE}[CANN 8.5.0+ Additional Setup]${NC}"
         
         # Check for ops package requirement
         if [ ! -d "$cann_path/opp" ]; then
-            echo "  ⚠ Warning: Ops package (opp) not found!"
+            echo -e "${YELLOW}  ⚠ Warning: Ops package (opp) not found!${NC}"
             echo "    For CANN 8.5.0+, you must install the matching ops package."
         else
-            echo "  ✓ Ops package found"
+            echo -e "${GREEN}  ✓ Ops package found${NC}"
         fi
         
         # Set LD_LIBRARY_PATH for non-Ascend hosts
         if ! command -v npu-smi &>/dev/null; then
             local arch=$(uname -m)
             export LD_LIBRARY_PATH="$cann_path/${arch}-linux/devlib:$LD_LIBRARY_PATH"
-            echo "  ✓ Set LD_LIBRARY_PATH for non-Ascend host development"
+            echo -e "${GREEN}  ✓ Set LD_LIBRARY_PATH for non-Ascend host development${NC}"
         fi
     fi
     
@@ -85,13 +145,21 @@ setup_environment() {
 # Print usage
 print_usage() {
     echo "Usage:"
-    echo "  source $0    # To setup environment in current shell"
+    echo "  source $0    # To setup environment in current shell (recommended)"
     echo "  $0           # To check environment without modifying current shell"
+    echo
+    echo "Options:"
+    echo "  -h, --help   Show this help message"
     echo
     echo "This script will:"
     echo "  1. Detect your CANN installation (8.3.RC1 or 8.5.0+)"
     echo "  2. Source the appropriate environment"
-    echo "  3. Perform version-specific setup"
+    echo "  3. Verify atc command is available"
+    echo "  4. Display NPU device info and SoC version warning"
+    echo
+    echo "Example:"
+    echo "  source ./setup_env.sh"
+    echo "  atc --model=model.onnx --framework=5 --output=model --soc_version=Ascend910B3"
 }
 
 # Main
@@ -102,11 +170,11 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
         exit 0
     fi
     
-    echo "Note: Running script directly. Environment changes will not persist."
+    echo -e "${YELLOW}Note: Running script directly. Environment changes will not persist.${NC}"
     echo "For persistent changes, run: source $0"
     echo
-    setup_environment
+    setup_environment && check_npu_device
 else
     # Script is being sourced
-    setup_environment
+    setup_environment && check_npu_device
 fi

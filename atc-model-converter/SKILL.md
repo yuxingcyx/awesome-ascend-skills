@@ -1,6 +1,6 @@
 ---
 name: atc-model-converter
-description: Complete toolkit for Huawei Ascend NPU model conversion and inference. (1) Convert ONNX models to .om format using ATC tool with multi-CANN version support (8.3.RC1, 8.5.0+). (2) Run Python inference on OM models using ais_bench. (3) Compare precision between CPU ONNX and NPU OM outputs. (4) End-to-end YOLO inference with Ultralytics preprocessing/postprocessing. Use when converting, testing, or deploying models on Ascend AI processors.
+description: Complete toolkit for Huawei Ascend NPU model conversion and inference. (1) Convert ONNX models to .om format using ATC tool with multi-CANN version support (8.3.RC1, 8.5.0+). (2) Run Python inference on OM models using ais_bench. (3) Compare precision between CPU ONNX and NPU OM outputs. (4) End-to-end YOLO inference with Ultralytics preprocessing/postprocessing - supports Detection, Pose, Segmentation, OBB tasks. Use when converting, testing, or deploying models on Ascend AI processors.
 ---
 
 # ATC Model Converter
@@ -8,6 +8,8 @@ description: Complete toolkit for Huawei Ascend NPU model conversion and inferen
 Complete guide for converting ONNX models to Ascend AI processor compatible format using ATC (Ascend Tensor Compiler) tool.
 
 **Supported CANN Versions:** 8.3.RC1, 8.5.0
+
+---
 
 ## ⚠️ Critical Compatibility Requirements
 
@@ -31,7 +33,25 @@ pip install "numpy<2.0" --force-reinstall
 pip install decorator attrs absl-py psutil protobuf sympy
 ```
 
-See [FAQ.md](references/FAQ.md) for detailed troubleshooting.
+---
+
+## ⚠️ IMPORTANT: SoC Version Must Match Exactly
+
+> **SoC version in ATC conversion must exactly match your target device!**
+> 
+> ```bash
+> # Get exact SoC version from your device
+> npu-smi info | grep Name
+> # Output: Name: 910B3 → Use: --soc_version=Ascend910B3
+> # Output: Name: 310P3 → Use: --soc_version=Ascend310P3
+> ```
+> 
+> **Common Error:**
+> ```
+> [ACL ERROR] EE1001: supported socVersion=Ascend910B3, 
+> but the model socVersion=Ascend910B
+> ```
+> **Fix:** Use exact SoC version from `npu-smi info`, not generic version!
 
 ---
 
@@ -39,200 +59,90 @@ See [FAQ.md](references/FAQ.md) for detailed troubleshooting.
 
 ```bash
 # 1. Check your CANN version and environment
-./scripts/check_env.sh
+./scripts/check_env_enhanced.sh
 
-# 2. Source the appropriate environment (see CANN Version Guide below)
-export PATH=/home/miniconda3/envs/atc_py310/bin:$PATH  # If using conda
-export PYTHONPATH=/home/miniconda3/envs/atc_py310/lib/python3.10/site-packages:$PYTHONPATH
+# 2. Source the appropriate environment
 source /usr/local/Ascend/ascend-toolkit/set_env.sh  # For 8.1.RC1/8.3.RC1
 # OR
-source /usr/local/Ascend/cann/set_env.sh  # For 8.5.0
+source /usr/local/Ascend/cann/set_env.sh            # For 8.5.0+
 
 # 3. Basic ONNX to OM conversion
-atc --model=model.onnx --framework=5 --output=output_model --soc_version=Ascend310P3
+atc --model=model.onnx --framework=5 --output=output_model \
+    --soc_version=Ascend910B3
 
 # With input shape specification
 atc --model=model.onnx --framework=5 --output=output_model \
-    --soc_version=Ascend310P3 \
-    --input_shape="input:1,3,224,224"
-
-# With AIPP preprocessing
-atc --model=model.onnx --framework=5 --output=output_model \
-    --soc_version=Ascend310P3 \
-    --insert_op_conf=aipp_config.cfg
-```
-
-## CANN Version Guide
-
-Different CANN versions have different environment setup paths:
-
-| CANN Version | Environment Path | Ops Package Requirement |
-|--------------|------------------|-------------------------|
-| 8.3.RC1 | `/usr/local/Ascend/ascend-toolkit/set_env.sh` | Standard installation |
-| 8.5.0 | `/usr/local/Ascend/cann/set_env.sh` | Must install matching ops package |
-
-### Auto-detect CANN Version
-
-```bash
-# Use provided script to detect and set environment
-./scripts/setup_env.sh
-
-# Or manually check version
-atc --help 2>&1 | head -5
-# OR
-cat /usr/local/Ascend/ascend-toolkit/latest/version.cfg 2>/dev/null || \
-cat /usr/local/Ascend/cann/latest/version.cfg 2>/dev/null
-```
-
-### Environment Setup by Version
-
-**For CANN 8.3.RC1:**
-```bash
-source /usr/local/Ascend/ascend-toolkit/set_env.sh
-export LD_LIBRARY_PATH=/usr/local/Ascend/ascend-toolkit/lib64:$LD_LIBRARY_PATH
-```
-
-**For CANN 8.5.0+:**
-```bash
-source /usr/local/Ascend/cann/set_env.sh
-# For non-Ascend host development only:
-export LD_LIBRARY_PATH=/usr/local/Ascend/cann/<arch>-linux/devlib:$LD_LIBRARY_PATH
-```
-
-## OM Model Inference
-
-After converting your model to OM format, use ais_bench for Python inference on Ascend NPU.
-
-### Install ais_bench
-
-**Option 1: Download pre-built wheel packages (recommended)**
-
-```bash
-# Download from Huawei OBS (choose version matching your Python and architecture)
-# See: https://gitee.com/ascend/tools/blob/master/ais-bench_workload/tool/ais_bench/README.md
-
-# Example for Python 3.10, aarch64:
-wget https://aisbench.obs.myhuaweicloud.com/packet/ais_bench_infer/0.0.2/ait/aclruntime-0.0.2-cp310-cp310-linux_aarch64.whl
-wget https://aisbench.obs.myhuaweicloud.com/packet/ais_bench_infer/0.0.2/ait/ais_bench-0.0.2-py3-none-any.whl
-
-# Install
-pip3 install ./aclruntime-*.whl ./ais_bench-*.whl
-```
-
-**Option 2: Build from source (if pre-built packages unavailable)**
-
-```bash
-git clone https://gitee.com/ascend/tools.git
-cd tools/ais-bench_workload/tool/ais_bench
-
-# Build packages
-pip3 wheel ./backend/ -v  # Build aclruntime
-pip3 wheel ./ -v          # Build ais_bench
-
-# Install
-pip3 install ./aclruntime-*.whl ./ais_bench-*.whl
-```
-
-### Basic Inference
-
-```bash
-# Print model info
-python3 scripts/infer_om.py --model model.om --info
-
-# Run inference with random input
-python3 scripts/infer_om.py --model model.om --input-shape "1,3,640,640"
-
-# Run inference with actual input
-python3 scripts/infer_om.py --model model.om --input test.npy --output result.npy
-
-# Performance benchmark
-python3 scripts/infer_om.py --model model.om --warmup 10 --loop 100
-```
-
-### Python API Usage
-
-```python
-from ais_bench.infer.interface import InferSession
-import numpy as np
-
-# Initialize session
-session = InferSession(device_id=0, model_path="model.om")
-
-# Get model info
-print("Inputs:", [(i.name, i.shape) for i in session.get_inputs()])
-print("Outputs:", [(o.name, o.shape) for o in session.get_outputs()])
-
-# Run inference
-input_data = np.random.randn(1, 3, 640, 640).astype(np.float32)
-outputs = session.infer([input_data], mode='static')
-
-# Get timing
-print(f"Inference time: {session.summary().exec_time_list[-1]:.3f} ms")
-
-# Cleanup
-session.free_resource()
+    --soc_version=Ascend910B3 \
+    --input_shape="input:1,3,640,640"
 ```
 
 ---
 
-## Precision Comparison
+## YOLO Model Conversion & Inference
 
-Verify conversion accuracy by comparing ONNX (CPU) vs OM (NPU) outputs.
+### YOLO Task Types & Output Formats
 
-```bash
-# Basic comparison
-python3 scripts/compare_precision.py --onnx model.onnx --om model.om --input test.npy
+| Task | Model Example | ONNX Output | Post-processing |
+|------|---------------|-------------|-----------------|
+| **Detection** | yolo26n.pt | `(1, 84, 8400)` | decode + NMS |
+| **Pose** | yolo26n-pose.pt | `(1, 300, 57)` | filter only |
+| **Segmentation** | yolo26n-seg.pt | `(1, 116, 8400)` | decode + NMS + mask |
+| **OBB** | yolo26n-obb.pt | `(1, 15, 8400)` | decode + NMS |
 
-# With custom tolerances
-python3 scripts/compare_precision.py --onnx model.onnx --om model.om --input test.npy \
-    --atol 1e-3 --rtol 1e-2
+> **Note:** YOLO ONNX outputs are raw feature maps, not processed detections. The `yolo_om_infer.py` script handles decode + NMS automatically.
 
-# Save detailed results
-python3 scripts/compare_precision.py --onnx model.onnx --om model.om --input test.npy \
-    --output comparison.json --save-diff ./diff/
-```
-
-### Understanding Results
-
-| Metric | Description |
-|--------|-------------|
-| `cosine_similarity` | 1.0 = identical, >0.99 = very close |
-| `max_abs_diff` | Maximum absolute difference |
-| `outlier_ratio` | Percentage of values exceeding tolerance |
-| `is_close` | Pass/fail based on atol/rtol |
-
-**Typical acceptable thresholds:**
-- FP32 models: `atol=1e-4`, `rtol=1e-3`
-- FP16 models: `atol=1e-3`, `rtol=1e-2`
-
----
-
-## End-to-End YOLO Inference
-
-Run complete YOLO inference pipeline with Ultralytics preprocessing/postprocessing.
-
-```bash
-# Single image
-python3 scripts/yolo_om_infer.py --model yolo.om --source image.jpg --output result.jpg
-
-# Directory of images
-python3 scripts/yolo_om_infer.py --model yolo.om --source images/ --output results/
-
-# With custom confidence threshold
-python3 scripts/yolo_om_infer.py --model yolo.om --source image.jpg --conf 0.5
-
-# Save detection results to txt files
-python3 scripts/yolo_om_infer.py --model yolo.om --source images/ --save-txt
-```
-
-### Python API for YOLO
+### Step 1: Export YOLO to ONNX
 
 ```python
-from yolo_om_infer import YoloOMInferencer
+from ultralytics import YOLO
 
-# Initialize
+model = YOLO('yolo26n.pt')  # or yolo26n-pose.pt, yolo26n-seg.pt, etc.
+
+# Export with opset 11 for CANN 8.1.RC1 compatibility
+model.export(format='onnx', imgsz=640, opset=11, simplify=True)
+```
+
+### Step 2: Convert to OM
+
+```bash
+# Get your SoC version first
+npu-smi info | grep Name
+
+# Convert
+atc --model=yolo26n.onnx --framework=5 --output=yolo26n \
+    --soc_version=Ascend910B3 \
+    --input_shape="images:1,3,640,640"
+```
+
+### Step 3: Run Inference
+
+```bash
+# Detection (default)
+python3 scripts/yolo_om_infer.py --model yolo26n.om \
+    --source image.jpg --task detect --output result.jpg
+
+# Pose estimation
+python3 scripts/yolo_om_infer.py --model yolo26n-pose.om \
+    --source image.jpg --task pose --output result_pose.jpg
+
+# Segmentation
+python3 scripts/yolo_om_infer.py --model yolo26n-seg.om \
+    --source image.jpg --task segment --output result_seg.jpg
+
+# Oriented Bounding Box
+python3 scripts/yolo_om_infer.py --model yolo26n-obb.om \
+    --source image.jpg --task obb --output result_obb.jpg
+```
+
+### YOLO Python API
+
+```python
+from yolo_om_infer import YoloOMInferencer, draw_results
+
+# Initialize for detection
 inferencer = YoloOMInferencer(
-    model_path="yolo.om",
+    model_path="yolo26n.om",
+    task="detect",  # or "pose", "segment", "obb"
     device_id=0,
     conf_thres=0.25,
     iou_thres=0.45
@@ -252,42 +162,95 @@ for det in result['detections']:
 inferencer.free_resource()
 ```
 
+For detailed YOLO guide, see [YOLO_GUIDE.md](references/YOLO_GUIDE.md).
+
 ---
 
-## Prerequisites
+## OM Model Inference (General)
 
-### Required Software
+After converting your model to OM format, use ais_bench for Python inference.
 
-- CANN Toolkit (8.3.RC1 or 8.5.0)
-- Python 3.7+ (for helper scripts)
-- onnxruntime (optional, for `get_onnx_info.py`)
-
-### Environment Variables
+### Install ais_bench
 
 ```bash
-# Optional: Set parallel compilation for large models
-export TE_PARALLEL_COMPILER=8
+# Download pre-built wheel packages (recommended)
+# See: https://gitee.com/ascend/tools/blob/master/ais-bench_workload/tool/ais_bench/README.md
 
-# Optional: Enable graph dump for debugging
-export DUMP_GE_GRAPH=1
+# Example for Python 3.10, aarch64:
+wget https://aisbench.obs.myhuaweicloud.com/packet/ais_bench_infer/0.0.2/ait/aclruntime-0.0.2-cp310-cp310-linux_aarch64.whl
+wget https://aisbench.obs.myhuaweicloud.com/packet/ais_bench_infer/0.0.2/ait/ais_bench-0.0.2-py3-none-any.whl
 
-# Optional: Enable verbose logging
-export ASCEND_SLOG_PRINT_TO_STDOUT=1
+pip3 install ./aclruntime-*.whl ./ais_bench-*.whl
 ```
 
-### Verify Environment
+### Basic Inference
 
 ```bash
-# Check ATC tool is available
-which atc
-atc --help | head -3
+# Print model info
+python3 scripts/infer_om.py --model model.om --info
 
-# Check NPU device info
-npu-smi info -l
+# Run inference with random input
+python3 scripts/infer_om.py --model model.om --input-shape "1,3,640,640"
 
-# Verify CANN environment
-echo $ASCEND_HOME
+# Run inference with actual input
+python3 scripts/infer_om.py --model model.om --input test.npy --output result.npy
 ```
+
+### Python API
+
+```python
+from ais_bench.infer.interface import InferSession
+import numpy as np
+
+session = InferSession(device_id=0, model_path="model.om")
+print("Inputs:", [(i.name, i.shape) for i in session.get_inputs()])
+print("Outputs:", [(o.name, o.shape) for o in session.get_outputs()])
+
+input_data = np.random.randn(1, 3, 640, 640).astype(np.float32)
+outputs = session.infer([input_data], mode='static')
+
+print(f"Inference time: {session.summary().exec_time_list[-1]:.3f} ms")
+session.free_resource()
+```
+
+See [INFERENCE.md](references/INFERENCE.md) for detailed ais_bench usage.
+
+---
+
+## Precision Comparison
+
+Verify conversion accuracy by comparing ONNX (CPU) vs OM (NPU) outputs.
+
+```bash
+# Basic comparison
+python3 scripts/compare_precision.py --onnx model.onnx --om model.om --input test.npy
+
+# With custom tolerances
+python3 scripts/compare_precision.py --onnx model.onnx --om model.om --input test.npy \
+    --atol 1e-3 --rtol 1e-2
+```
+
+| Metric | Description | Good Value |
+|--------|-------------|------------|
+| `cosine_similarity` | 1.0 = identical | >0.99 |
+| `max_abs_diff` | Maximum absolute difference | <1e-3 (FP32) |
+| `is_close` | Pass/fail based on atol/rtol | True |
+
+---
+
+## CANN Version Guide
+
+| CANN Version | Environment Path | Notes |
+|--------------|------------------|-------|
+| 8.3.RC1 | `/usr/local/Ascend/ascend-toolkit/set_env.sh` | Standard installation |
+| 8.5.0+ | `/usr/local/Ascend/cann/set_env.sh` | Must install matching ops package |
+
+```bash
+# Auto-detect CANN version
+./scripts/setup_env.sh
+```
+
+---
 
 ## Core Parameters
 
@@ -296,171 +259,31 @@ echo $ASCEND_HOME
 | `--model` | Yes | Input ONNX model path | `--model=resnet50.onnx` |
 | `--framework` | Yes | Framework type (5=ONNX) | `--framework=5` |
 | `--output` | Yes | Output OM model path | `--output=resnet50` |
-| `--soc_version` | Yes | Ascend chip version | `--soc_version=Ascend310P3` |
+| `--soc_version` | Yes | **Must match device exactly** | `--soc_version=Ascend910B3` |
 | `--input_shape` | Optional | Input tensor shapes | `--input_shape="input:1,3,224,224"` |
-| `--input_format` | Optional | Input format (NCHW/NHWC) | `--input_format=NCHW` |
 | `--precision_mode` | Optional | Precision mode | `--precision_mode=force_fp16` |
-| `--insert_op_conf` | Optional | AIPP config file path | `--insert_op_conf=aipp.cfg` |
-| `--log` | Optional | Log level | `--log=info` |
 
-## Common Workflows
-
-### 0. Preparing ONNX Model (CRITICAL)
-
-Before ATC conversion, ensure your ONNX model uses the correct opset version:
-
-**Using Ultralytics (YOLO models):**
-```python
-from ultralytics import YOLO
-
-model = YOLO('model.pt')
-# Use opset 11 for maximum compatibility with CANN 8.1.RC1
-model.export(format='onnx', imgsz=640, opset=11)
-```
-
-**Using PyTorch directly:**
-```python
-import torch
-
-dummy_input = torch.randn(1, 3, 640, 640)
-torch.onnx.export(
-    model,
-    dummy_input,
-    'model.onnx',
-    opset_version=11,  # Use 11 for CANN 8.1.RC1, 13 or 17 for newer CANN
-    input_names=['images'],
-    output_names=['output0']
-)
-```
-
-**Verify ONNX opset version:**
-```bash
-# Install onnx if needed
-pip install onnx
-
-# Check opset version
-python3 -c "import onnx; model = onnx.load('model.onnx'); print(model.opset_import)"
-```
+For complete parameters, see [PARAMETERS.md](references/PARAMETERS.md).
 
 ---
 
-### 1. Basic ONNX Conversion
+## SoC Version Reference
 
-Convert a simple ONNX model without shape specification:
-
-```bash
-atc --model=yolov5s.onnx \
-    --framework=5 \
-    --output=yolov5s \
-    --soc_version=Ascend310P3
-```
-
-### 2. Conversion with Input Shape
-
-When input shape is dynamic or needs override:
-
-```bash
-# First, inspect ONNX input names
-python3 scripts/get_onnx_info.py model.onnx
-
-# Then convert with correct input name
-atc --model=model.onnx \
-    --framework=5 \
-    --output=model_om \
-    --soc_version=Ascend310P3 \
-    --input_shape="actual_input_name:1,3,640,640"
-```
-
-### 3. Conversion with AIPP
-
-AIPP (AI Preprocessing) handles image preprocessing on NPU:
-
-```bash
-# Create AIPP config file
-cat > aipp.cfg << 'AIPP_EOF'
-aipp_op {
-    aipp_mode: static
-    input_format: YUV420SP_U8
-    src_image_size_w: 640
-    src_image_size_h: 640
-    crop: false
-    resize: false
-    csc_switch: true
-    matrix_r0c0: 298
-    matrix_r0c1: 516
-    matrix_r0c2: 0
-    matrix_r1c0: 298
-    matrix_r1c1: -100
-    matrix_r1c2: -208
-    matrix_r2c0: 298
-    matrix_r2c1: 0
-    matrix_r2c2: 409
-    input_bias_0: 16
-    input_bias_1: 128
-    input_bias_2: 128
-    mean_chn_0: 104
-    mean_chn_1: 117
-    mean_chn_2: 123
-    min_chn_0: 0.0
-    min_chn_1: 0.0
-    min_chn_2: 0.0
-    var_reci_chn_0: 1.0
-    var_reci_chn_1: 1.0
-    var_reci_chn_2: 1.0
-}
-AIPP_EOF
-
-# Convert with AIPP
-atc --model=model.onnx \
-    --framework=5 \
-    --output=model_aipp \
-    --soc_version=Ascend310P3 \
-    --insert_op_conf=aipp.cfg
-```
-
-### 4. Precision Mode Selection
-
-Control computation precision:
-
-```bash
-# Force FP32 for maximum precision
-atc --model=model.onnx --framework=5 --output=model_fp32 \
-    --soc_version=Ascend310P3 --precision_mode=force_fp32
-
-# Force FP16 for better performance (may reduce precision)
-atc --model=model.onnx --framework=5 --output=model_fp16 \
-    --soc_version=Ascend310P3 --precision_mode=force_fp16
-
-# Allow mix precision (default)
-atc --model=model.onnx --framework=5 --output=model_mix \
-    --soc_version=Ascend310P3 --precision_mode=allow_mix_precision
-```
-
-## Soc Version Reference
-
-| Device | Soc Version | How to Check |
+| Device | SoC Version | How to Check |
 |--------|-------------|--------------|
-| Atlas 200I DK A2 | Ascend310B4 | `npu-smi info` |
-| Atlas 310P | Ascend310P1/P3 | `npu-smi info` |
-| Atlas 910 | Ascend910 | `npu-smi info` |
-| Atlas 910B | Ascend910B | `npu-smi info` |
+| Atlas 910B3 | Ascend910B3 | `npu-smi info \| grep Name` |
+| Atlas 310P | Ascend310P1/P3 | `npu-smi info \| grep Name` |
+| Atlas 200I DK A2 | Ascend310B4 | `npu-smi info \| grep Name` |
 
-**Get your soc_version:**
-```bash
-# Get Name field, prepend "Ascend"
-npu-smi info | grep Name
-# Result: Name: xxxyy → Use: Ascendxxxyy
-```
+**Always verify with `npu-smi info` - do not assume version!**
+
+---
 
 ## Troubleshooting
 
 ### Error: Opname not found in model
-
-**Cause:** Wrong input name specified in `--input_shape`
-
-**Solution:**
 ```bash
-# Verify input names with script
+# Verify input names
 python3 scripts/get_onnx_info.py model.onnx
 
 # Use correct name in conversion
@@ -468,80 +291,45 @@ atc --model=model.onnx --input_shape="correct_name:1,3,224,224" ...
 ```
 
 ### Error: Invalid soc_version
-
-**Cause:** Wrong chip version specified
-
-**Solution:**
 ```bash
-# Check actual chip version
-npu-smi info
-# Use the exact Name from output with "Ascend" prefix
+# Check actual chip version - must be EXACT match
+npu-smi info | grep Name
+# Use: Ascend + Name value (e.g., Ascend910B3, not Ascend910B)
 ```
 
 ### Conversion Too Slow
-
-**Solution:** Enable parallel compilation
 ```bash
 export TE_PARALLEL_COMPILER=16
 atc --model=model.onnx ...
 ```
 
-### Debug Graph Issues
+### YOLO Detection Results Look Wrong
+- Ensure you're using correct `--task` parameter
+- Detection models need decode + NMS (script handles this)
+- Pose models output top-300 detections (no NMS needed)
 
-```bash
-# Enable graph dumping
-export DUMP_GE_GRAPH=2
-export DUMP_GRAPH_LEVEL=2
+See [FAQ.md](references/FAQ.md) for more troubleshooting.
 
-# Run conversion, then check generated .pbtxt files
-atc --model=model.onnx ...
-# View ge_onnx*.pbtxt with Netron
-```
-
-## Version-Specific Notes
-
-### CANN 8.3.RC1
-
-- Environment path: `/usr/local/Ascend/ascend-toolkit/`
-- Some advanced fusion options may differ
-- Standard ops package installation
-
-### CANN 8.5.0+
-
-- Environment path: `/usr/local/Ascend/cann/`
-- **Important:** Must install matching ops package for target device
-- Enhanced fusion and optimization capabilities
-- New parameters: `--compression_optimize_conf`, `--op_compiler_cache_mode`
-
-See [CANN_VERSIONS.md](references/CANN_VERSIONS.md) for detailed version-specific differences.
-
-## Advanced Parameters
-
-See [PARAMETERS.md](references/PARAMETERS.md) for complete ATC parameter reference including:
-- Fusion configuration
-- Custom operator settings
-- Dynamic shape handling
-- Quantization options
-- Memory optimization
+---
 
 ## Resources
 
 ### scripts/
 **Conversion & Environment:**
-- **`check_env_enhanced.sh`** - ⭐ **RECOMMENDED** - Comprehensive compatibility check (Python, NumPy, modules, CANN)
+- **`check_env_enhanced.sh`** - ⭐ Comprehensive compatibility check
 - `get_onnx_info.py` - Inspect ONNX model inputs/outputs
+- `setup_env.sh` - Auto-setup CANN environment with SoC warning
 - `convert_onnx.sh` - Batch conversion helper
-- `check_env.sh` - Basic CANN environment check
-- `setup_env.sh` - Auto-setup CANN environment
 
 **Inference & Testing:**
+- **`yolo_om_infer.py`** - ⭐ End-to-end YOLO inference (detect/pose/segment/obb)
 - **`infer_om.py`** - ⭐ Python inference for OM models using ais_bench
 - **`compare_precision.py`** - ⭐ Compare ONNX vs OM output precision
-- **`yolo_om_infer.py`** - ⭐ End-to-end YOLO inference with Ultralytics pipeline
 
 ### references/
+- **[YOLO_GUIDE.md](references/YOLO_GUIDE.md)** - ⭐ YOLO detailed guide (formats, post-processing)
 - [PARAMETERS.md](references/PARAMETERS.md) - Complete ATC parameter reference
 - [AIPP_CONFIG.md](references/AIPP_CONFIG.md) - AIPP configuration guide
-- [INFERENCE.md](references/INFERENCE.md) - ⭐ ais_bench inference guide (API, modes, optimization)
+- [INFERENCE.md](references/INFERENCE.md) - ais_bench inference guide
 - [FAQ.md](references/FAQ.md) - Frequently asked questions
 - [CANN_VERSIONS.md](references/CANN_VERSIONS.md) - Version-specific guidance
