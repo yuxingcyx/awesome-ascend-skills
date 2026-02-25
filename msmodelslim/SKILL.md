@@ -18,14 +18,26 @@ MindStudio ModelSlim (msModelSlim) is a model compression tool optimized for Hua
 
 ### One-Click Quantization (V1 - Recommended)
 
+V1 automatic quantization uses configuration files from `lab_practice/` directory.
+
 ```bash
 # Basic W8A8 quantization for Qwen2.5-7B-Instruct
+# Config files located at: lab_practice/<model_series>/<model>-<quant_type>-v1.yaml
 msmodelslim quant \
     --model_path /path/to/Qwen2.5-7B-Instruct \
     --save_path /path/to/output \
     --device npu \
     --model_type Qwen2.5-7B-Instruct \
-    --quant_type w8a8 \
+    --config_path /path/to/msmodelslim/lab_practice/qwen2.5/qwen2.5-7b-w8a8-v1.yaml \
+    --trust_remote_code True
+
+# MoE model quantization (Qwen3-30B-A3B W4A8)
+msmodelslim quant \
+    --model_path /path/to/Qwen3-30B-A3B \
+    --save_path /path/to/output \
+    --device npu \
+    --model_type Qwen3-30B \
+    --config_path /path/to/msmodelslim/lab_practice/qwen3_moe/qwen3-30b-w4a8-v1.yaml \
     --trust_remote_code True
 
 # Multi-device distributed quantization
@@ -34,18 +46,13 @@ msmodelslim quant \
     --save_path /path/to/output \
     --device npu:0,1,2,3 \
     --model_type Qwen2.5-72B-Instruct \
-    --quant_type w8a8c8 \
-    --trust_remote_code True
-
-# Use custom config file
-msmodelslim quant \
-    --model_path /path/to/model \
-    --save_path /path/to/output \
-    --device npu \
-    --model_type Qwen2.5-7B-Instruct \
-    --config_path assets/quant_config_w8a8.yaml \
+    --config_path /path/to/msmodelslim/lab_practice/qwen2.5/qwen2.5-72b-w8a8c8-v1.yaml \
     --trust_remote_code True
 ```
+
+> **Note**: Find config files in `lab_practice/` directory of msmodelslim repository:
+> - Structure: `lab_practice/<model_series>/<model>-<quant_type>-v1.yaml`
+> - Example: `lab_practice/qwen2.5/qwen2.5-7b-w8a8-v1.yaml`
 
 ### Traditional Quantization (V0)
 
@@ -112,6 +119,25 @@ See [references/installation.md](references/installation.md) for detailed enviro
 | **Long sequence** | W8A8C8 (with KV Cache quant) |
 | **Atlas 300I Duo** | W8A8S or W16A16S |
 
+### BFLOAT16 Model Notes
+
+For models with `torch_dtype=bfloat16` weights (e.g., Qwen3-30B-A3B):
+
+If you encounter `AclNN_Parameter_Error(EZ1001): Tensor self not implemented for DT_BFLOAT16`, this is likely a **Docker image issue**, not a msmodelslim limitation.
+
+**Quick Diagnosis**:
+```bash
+# Test if torch_npu works correctly
+python3 -c "import torch; import torch_npu; a = torch.tensor(1).npu(); print('NPU OK')"
+```
+
+If this fails, your Docker image has compatibility issues. Try:
+1. Use a different/updated Docker image
+2. Reinstall torch_npu matching your CANN version
+3. Ensure CANN 8.3.RC1+ for BF16 support
+
+> **Container Setup**: See [ascend-docker](../ascend-docker/SKILL.md) for proper Docker container creation with NPU device mappings. Refer to [references/docker-setup.md](references/docker-setup.md) for msmodelslim-specific container configuration.
+
 ---
 
 ## Algorithm Selection
@@ -140,7 +166,7 @@ See [references/installation.md](references/installation.md) for detailed enviro
 
 ### Quick Selection Guide
 
-- **Beginners**: Use one-click quantization with `--quant_type` (auto-configured)
+- **Beginners**: Use one-click quantization with `--config_path` pointing to `lab_practice/` config files
 - **Precision priority**: QuaRot + AutoRound
 - **Long sequence**: FA3 + KVCache Quant
 - **Custom model**: See [references/model-integration.md](references/model-integration.md)
